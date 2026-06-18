@@ -25,9 +25,7 @@ DROP TABLE IF EXISTS dbo.COACH;
 GO
 
 
-/* ============================================================
-   TABLA 1: COACH
-   ============================================================ */
+-- TABLA 1: COACH
 
 CREATE TABLE dbo.COACH (
     id_coach INT IDENTITY(1,1) NOT NULL,
@@ -45,15 +43,13 @@ CREATE TABLE dbo.COACH (
 GO
 
 
-/* ============================================================
-   TABLA 2: NIVEL_ALUMNO
-   ============================================================ */
+-- TABLA 2: NIVEL_ALUMNO
 
 CREATE TABLE dbo.NIVEL_ALUMNO (
     id_nivel_alumno INT IDENTITY(1,1) NOT NULL,
     nombre_nivel NVARCHAR(50) NOT NULL,
     porcentaje_incremento_base DECIMAL(5,2) NOT NULL,
-    descripcion NVARCHAR(250) NULL,
+    descripcion NVARCHAR(250),
 
     CONSTRAINT PK_NIVEL_ALUMNO PRIMARY KEY (id_nivel_alumno),
     CONSTRAINT UQ_NIVEL_ALUMNO_nombre UNIQUE (nombre_nivel),
@@ -63,10 +59,8 @@ CREATE TABLE dbo.NIVEL_ALUMNO (
 GO
 
 
-/* ============================================================
-   TABLA 3: ALUMNO
-   ============================================================ */
-
+--  TABLA 3: ALUMNO
+  
 CREATE TABLE dbo.ALUMNO (
     id_alumno INT IDENTITY(1,1) NOT NULL,
     id_coach INT NOT NULL,
@@ -93,9 +87,8 @@ CREATE TABLE dbo.ALUMNO (
 GO
 
 
-/* ============================================================
-   TABLA 4: RUTINA
-   ============================================================ */
+--  TABLA 4: RUTINA
+   
 
 CREATE TABLE dbo.RUTINA (
     id_rutina INT IDENTITY(1,1) NOT NULL,
@@ -120,16 +113,14 @@ CREATE TABLE dbo.RUTINA (
 GO
 
 
-/* ============================================================
-   TABLA 5: EJERCICIO
-   ============================================================ */
+-- TABLA 5: EJERCICIO
 
 CREATE TABLE dbo.EJERCICIO (
     id_ejercicio INT IDENTITY(1,1) NOT NULL,
     nombre NVARCHAR(100) NOT NULL,
     grupo_muscular NVARCHAR(80) NOT NULL,
     tipo_ejercicio NVARCHAR(50) NOT NULL,
-    descripcion NVARCHAR(250) NULL,
+    descripcion NVARCHAR(250),
 
     CONSTRAINT PK_EJERCICIO PRIMARY KEY (id_ejercicio),
     CONSTRAINT UQ_EJERCICIO_nombre UNIQUE (nombre)
@@ -137,9 +128,7 @@ CREATE TABLE dbo.EJERCICIO (
 GO
 
 
-/* ============================================================
-   TABLA 6: RUTINA_EJERCICIO
-   ============================================================ */
+--  TABLA 6: RUTINA_EJERCICIO
 
 CREATE TABLE dbo.RUTINA_EJERCICIO (
     id_rutina_ejercicio INT IDENTITY(1,1) NOT NULL,
@@ -174,9 +163,7 @@ CREATE TABLE dbo.RUTINA_EJERCICIO (
 GO
 
 
-/* ============================================================
-   TABLA 7: SESION_ENTRENAMIENTO
-   ============================================================ */
+-- TABLA 7: SESION_ENTRENAMIENTO
 
 CREATE TABLE dbo.SESION_ENTRENAMIENTO (
     id_sesion INT IDENTITY(1,1) NOT NULL,
@@ -196,9 +183,7 @@ CREATE TABLE dbo.SESION_ENTRENAMIENTO (
 GO
 
 
-/* ============================================================
-   TABLA 8: REGISTRO_EJERCICIO
-   ============================================================ */
+-- TABLA 8: REGISTRO_EJERCICIO
 
 CREATE TABLE dbo.REGISTRO_EJERCICIO (
     id_registro INT IDENTITY(1,1) NOT NULL,
@@ -237,9 +222,7 @@ CREATE TABLE dbo.REGISTRO_EJERCICIO (
 GO
 
 
-/* ============================================================
-   TABLA 9: SUGERENCIA_PROGRESION
-   ============================================================ */
+--   TABLA 9: SUGERENCIA_PROGRESION
 
 CREATE TABLE dbo.SUGERENCIA_PROGRESION (
     id_sugerencia INT IDENTITY(1,1) NOT NULL,
@@ -275,9 +258,7 @@ CREATE TABLE dbo.SUGERENCIA_PROGRESION (
 GO
 
 
-/* ============================================================
-   TABLA 10: HISTORIAL_PROGRESION
-   ============================================================ */
+--  TABLA 10: HISTORIAL_PROGRESION
 
 CREATE TABLE dbo.HISTORIAL_PROGRESION (
     id_historial INT IDENTITY(1,1) NOT NULL,
