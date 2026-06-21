@@ -24,10 +24,20 @@ GO
        Evento : AFTER UPDATE
        Propósito: sincroniza RUTINA_EJERCICIO.peso_sugerido
                   cuando una sugerencia pasa a estado Aplicada (4)
+
+    3. TR_GenerarSugerenciaProgresion
+       Tabla  : REGISTRO_EJERCICIO
+       Evento : AFTER INSERT
+       Propósito: genera automáticamente una sugerencia de progresión
+                  cuando el alumno cumple el objetivo con RIR de sobra,
+                  usando NIVEL_ALUMNO.porcentaje_incremento_base
 =============================================================
 */
 
 -- Limpieza previa
+IF OBJECT_ID('dbo.TR_GenerarSugerenciaProgresion', 'TR') IS NOT NULL
+    DROP TRIGGER dbo.TR_GenerarSugerenciaProgresion;
+GO
 IF OBJECT_ID('dbo.TR_AplicarProgresionAlResolver', 'TR') IS NOT NULL
     DROP TRIGGER dbo.TR_AplicarProgresionAlResolver;
 GO
@@ -151,5 +161,108 @@ BEGIN
     INNER JOIN deleted               d  ON d.id_sugerencia       = i.id_sugerencia
     WHERE  i.id_estado_sugerencia = 4    -- estado nuevo = Aplicada
       AND  d.id_estado_sugerencia <> 4;  -- estado anterior ≠ Aplicada (evita re-aplicación)
+END;
+GO
+
+
+-- ============================================================
+-- TRIGGER 3 – Generación automática de sugerencia de progresión
+-- ============================================================
+/*
+  TR_GenerarSugerenciaProgresion
+  ────────────────────────────────
+  Dispara AFTER INSERT en REGISTRO_EJERCICIO.
+
+  Regla de negocio (autorregulación por RIR):
+    Cuando un alumno registra un ejercicio y:
+      a) cumple o supera las series objetivo,
+      b) cumple o supera las repeticiones objetivo, y
+      c) termina con un RIR igual o mayor al objetivo
+         (le sobró esfuerzo, el peso le resultó manejable),
+    el sistema interpreta que está listo para progresar y genera
+    automáticamente una SUGERENCIA_PROGRESION en estado Pendiente (1).
+
+    El incremento se calcula con el porcentaje propio del NIVEL del
+    alumno (NIVEL_ALUMNO.porcentaje_incremento_base):
+      peso_nuevo = peso_sugerido_actual × (1 + porcentaje / 100)
+    Así un Novato progresa más rápido (7.50%) que un Avanzado (2.50%).
+
+  Implementación:
+    a) CTE "candidatas": navega la cadena
+       REGISTRO → RUTINA_EJERCICIO → RUTINA → ALUMNO → NIVEL_ALUMNO
+       para obtener el porcentaje del nivel y calcular el peso nuevo.
+       ROW_NUMBER asegura una sola sugerencia por prescripción aunque
+       el INSERT traiga varias filas (set-based, sin cursores).
+
+    b) Filtros de inserción:
+       · peso_nuevo > peso_actual  → evita sugerencias triviales y
+         respeta el CHECK CK_SUGERENCIA_incremento_real.
+       · NOT EXISTS sugerencia Pendiente → respeta el índice filtrado
+         UX_SUGERENCIA_pendiente_por_prescripcion (una Pendiente por
+         prescripción) y evita la excepción de índice único.
+
+  Nota:
+    Este trigger NO debe dispararse durante la carga de datos de
+    prueba (17c). Por eso este script se ejecuta DESPUÉS de 17c.
+
+  Ejemplo de uso:
+    -- Suponiendo re5 con series_objetivo=3, repeticiones_objetivo=10,
+    -- rir_objetivo=2 y peso_sugerido=60.00, para un alumno Intermedio (5%):
+    EXEC dbo.SP_InsertRegistroEjercicio
+         @id_sesion = 1, @id_rutina_ejercicio = 5,
+         @series_realizadas = 3, @repeticiones_realizadas = 10,
+         @peso_utilizado = 60.00, @rir_promedio = 3;
+    -- Se generará una sugerencia Pendiente: 60.00 → 63.00 (5%).
+*/
+CREATE TRIGGER dbo.TR_GenerarSugerenciaProgresion
+ON  dbo.REGISTRO_EJERCICIO
+AFTER INSERT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    ;WITH candidatas AS (
+        SELECT
+            re.id_rutina_ejercicio,
+            re.peso_sugerido                              AS peso_actual,
+            na.porcentaje_incremento_base                 AS porcentaje,
+            CAST(re.peso_sugerido * (1 + na.porcentaje_incremento_base / 100.0)
+                 AS DECIMAL(6,2))                         AS peso_nuevo,
+            ROW_NUMBER() OVER (
+                PARTITION BY re.id_rutina_ejercicio
+                ORDER BY i.id_registro DESC
+            )                                             AS rn
+        FROM   inserted i
+        INNER JOIN dbo.RUTINA_EJERCICIO re ON re.id_rutina_ejercicio = i.id_rutina_ejercicio
+        INNER JOIN dbo.RUTINA           ru ON ru.id_rutina           = re.id_rutina
+        INNER JOIN dbo.ALUMNO           a  ON a.id_alumno            = ru.id_alumno
+        INNER JOIN dbo.NIVEL_ALUMNO     na ON na.id_nivel_alumno     = a.id_nivel_alumno
+        WHERE  i.series_realizadas       >= re.series_objetivo
+          AND  i.repeticiones_realizadas >= re.repeticiones_objetivo
+          AND  i.rir_promedio            >= re.rir_objetivo
+          AND  re.peso_sugerido > 0
+    )
+    INSERT INTO dbo.SUGERENCIA_PROGRESION
+        (id_rutina_ejercicio, id_estado_sugerencia, fecha_sugerencia,
+         peso_actual, peso_sugerido, porcentaje_incremento, motivo)
+    SELECT
+        c.id_rutina_ejercicio,
+        1,                              -- Pendiente
+        CAST(GETDATE() AS DATE),
+        c.peso_actual,
+        c.peso_nuevo,
+        c.porcentaje,
+        N'Sugerencia automática: objetivo de series y repeticiones cumplido '
+      + N'con RIR igual o mayor al objetivo. Incremento aplicado según el '
+      + N'nivel del alumno.'
+    FROM   candidatas c
+    WHERE  c.rn = 1
+      AND  c.peso_nuevo > c.peso_actual
+      AND  NOT EXISTS (
+            SELECT 1
+            FROM   dbo.SUGERENCIA_PROGRESION sp
+            WHERE  sp.id_rutina_ejercicio  = c.id_rutina_ejercicio
+              AND  sp.id_estado_sugerencia = 1   -- ya hay una Pendiente
+      );
 END;
 GO

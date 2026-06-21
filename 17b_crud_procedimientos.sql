@@ -271,10 +271,10 @@ GO
 CREATE PROCEDURE dbo.SP_InsertAlumno
     @id_coach                   INT,
     @id_nivel_alumno            INT,
-    @id_objetivo_entrenamiento  INT           = NULL,
     @nombre                     NVARCHAR(80),
     @apellido                   NVARCHAR(80),
     @email                      NVARCHAR(120),
+    @id_objetivo_entrenamiento  INT           = NULL,
     @fecha_alta                 DATE          = NULL
 AS
 BEGIN
@@ -402,6 +402,22 @@ BEGIN
         RETURN;
     END;
 
+    -- Si se intenta (re)activar esta rutina, el alumno no puede tener otra activa.
+    -- Refleja la regla del índice filtrado UX_RUTINA_activa_por_alumno con un
+    -- mensaje claro en lugar de la excepción cruda de índice único.
+    IF @id_estado_rutina = 1
+       AND EXISTS (
+           SELECT 1
+           FROM   dbo.RUTINA AS r_otra
+           WHERE  r_otra.id_alumno = (SELECT id_alumno FROM dbo.RUTINA WHERE id_rutina = @id_rutina)
+             AND  r_otra.id_estado_rutina = 1
+             AND  r_otra.id_rutina <> @id_rutina
+       )
+    BEGIN
+        RAISERROR('El alumno ya posee otra rutina activa. Finalícela antes de activar esta.', 16, 1);
+        RETURN;
+    END;
+
     UPDATE dbo.RUTINA
     SET nombre                    = ISNULL(@nombre,                    nombre),
         id_objetivo_entrenamiento = ISNULL(@id_objetivo_entrenamiento, id_objetivo_entrenamiento),
@@ -513,6 +529,25 @@ BEGIN
         RETURN;
     END;
 
+    -- Validaciones de rango (complementan los CHECK de la tabla con mensajes claros)
+    IF @series_objetivo <= 0 OR @repeticiones_objetivo <= 0
+    BEGIN
+        RAISERROR('Series y repeticiones objetivo deben ser mayores a 0.', 16, 1);
+        RETURN;
+    END;
+
+    IF @peso_sugerido < 0
+    BEGIN
+        RAISERROR('El peso sugerido no puede ser negativo.', 16, 1);
+        RETURN;
+    END;
+
+    IF @rir_objetivo < 0 OR @rir_objetivo > 10
+    BEGIN
+        RAISERROR('El RIR objetivo debe estar entre 0 y 10.', 16, 1);
+        RETURN;
+    END;
+
     INSERT INTO dbo.RUTINA_EJERCICIO
         (id_rutina, id_ejercicio, series_objetivo, repeticiones_objetivo,
          peso_sugerido, rir_objetivo, observaciones)
@@ -616,6 +651,12 @@ BEGIN
         RETURN;
     END;
 
+    IF NOT EXISTS (SELECT 1 FROM dbo.ESTADO_SESION WHERE id_estado_sesion = @id_estado_sesion)
+    BEGIN
+        RAISERROR('Estado de sesión inválido.', 16, 1);
+        RETURN;
+    END;
+
     UPDATE dbo.SESION_ENTRENAMIENTO
     SET id_estado_sesion      = @id_estado_sesion,
         comentarios_generales = ISNULL(@comentarios_generales, comentarios_generales)
@@ -651,6 +692,19 @@ BEGIN
                WHERE id_sesion = @id_sesion AND id_rutina_ejercicio = @id_rutina_ejercicio)
     BEGIN
         RAISERROR('Ya existe un registro para esta prescripción en la sesión indicada.', 16, 1);
+        RETURN;
+    END;
+
+    -- Validaciones de rango (complementan los CHECK de la tabla con mensajes claros)
+    IF @series_realizadas < 0 OR @repeticiones_realizadas < 0 OR @peso_utilizado < 0
+    BEGIN
+        RAISERROR('Series, repeticiones y peso realizados no pueden ser negativos.', 16, 1);
+        RETURN;
+    END;
+
+    IF @rir_promedio < 0 OR @rir_promedio > 10
+    BEGIN
+        RAISERROR('El RIR promedio debe estar entre 0 y 10.', 16, 1);
         RETURN;
     END;
 
@@ -725,6 +779,12 @@ BEGIN
     IF @peso_sugerido < @peso_actual
     BEGIN
         RAISERROR('El peso sugerido no puede ser menor al peso actual.', 16, 1);
+        RETURN;
+    END;
+
+    IF @porcentaje_incremento <= 0 OR @porcentaje_incremento > 100
+    BEGIN
+        RAISERROR('El porcentaje de incremento debe estar entre 0.01 y 100.', 16, 1);
         RETURN;
     END;
 
