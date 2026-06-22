@@ -4,7 +4,6 @@ GO
 /*
   Sección 17d (iv) – FUNCIÓN ESCALAR + SP COMPLEJO
   
-  :
     1. FN_VolumenSesion (@id_sesion INT) → DECIMAL(12,2)
        Calcula el volumen total de carga de una sesión.
 
@@ -182,4 +181,5 @@ GO
 -- A modo de ejemplo:
 
 EXEC dbo.SP_PanelCoach 1;
+
 
